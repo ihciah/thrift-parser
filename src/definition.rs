@@ -6,34 +6,57 @@ use nom::multi::separated_list0;
 use nom::sequence::{delimited, pair, preceded, tuple};
 use nom::IResult;
 
-use crate::basic::{Identifier, ListSeparator, Separator};
-use crate::constant::{parse_list_separator, ConstValue, IntConstant};
-use crate::field::Field;
-use crate::functions::Function;
-use crate::types::FieldType;
+use crate::basic::{Identifier, IdentifierRef, ListSeparator, Separator};
+use crate::constant::{parse_list_separator, ConstValue, ConstValueRef, IntConstant};
+use crate::field::{Field, FieldRef};
+use crate::functions::{Function, FunctionRef};
+use crate::types::{FieldType, FieldTypeRef};
 use crate::Parser;
 
 // Const           ::=  'const' FieldType Identifier '=' ConstValue ListSeparator?
 #[derive(Debug, Clone, PartialEq)]
-pub struct Const<'a> {
-    pub name: Identifier<'a>,
-    pub type_: FieldType<'a>,
-    pub value: ConstValue<'a>,
+pub struct ConstRef<'a> {
+    pub name: IdentifierRef<'a>,
+    pub type_: FieldTypeRef<'a>,
+    pub value: ConstValueRef<'a>,
 }
 
-impl<'a> Parser<'a> for Const<'a> {
+impl<'a> Parser<'a> for ConstRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
                 tag("const"),
-                preceded(Separator::parse, FieldType::parse),
-                preceded(Separator::parse, Identifier::parse),
+                preceded(Separator::parse, FieldTypeRef::parse),
+                preceded(Separator::parse, IdentifierRef::parse),
                 preceded(opt(Separator::parse), cchar('=')),
-                preceded(opt(Separator::parse), ConstValue::parse),
+                preceded(opt(Separator::parse), ConstValueRef::parse),
                 opt(pair(opt(Separator::parse), ListSeparator::parse)),
             )),
             |(_, type_, name, _, value, _)| Self { name, type_, value },
         )(input)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Const {
+    pub name: Identifier,
+    pub type_: FieldType,
+    pub value: ConstValue,
+}
+
+impl<'a> From<ConstRef<'a>> for Const {
+    fn from(r: ConstRef<'a>) -> Self {
+        Self {
+            name: r.name.into(),
+            type_: r.type_.into(),
+            value: r.value.into(),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for Const {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        ConstRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
     }
 }
 
@@ -42,48 +65,72 @@ impl<'a> Parser<'a> for Const<'a> {
 // BaseType        ::=  'bool' | 'byte' | 'i8' | 'i16' | 'i32' | 'i64' | 'double' | 'string' | 'binary'
 // ContainerType   ::=  MapType | SetType | ListType
 #[derive(Debug, Clone, PartialEq)]
-pub struct Typedef<'a> {
-    pub old: FieldType<'a>,
-    pub alias: Identifier<'a>,
+pub struct TypedefRef<'a> {
+    pub old: FieldTypeRef<'a>,
+    pub alias: IdentifierRef<'a>,
 }
 
-impl<'a> Parser<'a> for Typedef<'a> {
+impl<'a> Parser<'a> for TypedefRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
                 tag("typedef"),
                 preceded(
                     Separator::parse,
-                    alt((FieldType::parse_base_type, FieldType::parse_container_type)),
+                    alt((
+                        FieldTypeRef::parse_base_type,
+                        FieldTypeRef::parse_container_type,
+                    )),
                 ),
-                preceded(Separator::parse, Identifier::parse),
+                preceded(Separator::parse, IdentifierRef::parse),
             )),
             |(_, old, alias)| Self { old, alias },
         )(input)
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Typedef {
+    pub old: FieldType,
+    pub alias: Identifier,
+}
+
+impl<'a> From<TypedefRef<'a>> for Typedef {
+    fn from(r: TypedefRef<'a>) -> Self {
+        Self {
+            old: r.old.into(),
+            alias: r.alias.into(),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for Typedef {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        TypedefRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
 // Enum            ::=  'enum' Identifier '{' (Identifier ('=' IntConstant)? ListSeparator?)* '}'
 #[derive(Debug, Clone, PartialEq)]
-pub struct Enum<'a> {
-    pub name: Identifier<'a>,
-    pub children: Vec<EnumValue<'a>>,
+pub struct EnumRef<'a> {
+    pub name: IdentifierRef<'a>,
+    pub children: Vec<EnumValueRef<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct EnumValue<'a> {
-    pub name: Identifier<'a>,
+pub struct EnumValueRef<'a> {
+    pub name: IdentifierRef<'a>,
     pub value: Option<IntConstant>,
 }
 
-impl<'a> Parser<'a> for Enum<'a> {
+impl<'a> Parser<'a> for EnumRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
                 tag("enum"),
-                preceded(Separator::parse, Identifier::parse),
+                preceded(Separator::parse, IdentifierRef::parse),
                 tuple((opt(Separator::parse), cchar('{'), opt(Separator::parse))),
-                separated_list0(parse_list_separator, EnumValue::parse),
+                separated_list0(parse_list_separator, EnumValueRef::parse),
                 preceded(opt(Separator::parse), cchar('}')),
             )),
             |(_, name, _, children, _)| Self { name, children },
@@ -91,11 +138,11 @@ impl<'a> Parser<'a> for Enum<'a> {
     }
 }
 
-impl<'a> Parser<'a> for EnumValue<'a> {
+impl<'a> Parser<'a> for EnumValueRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
-                Identifier::parse,
+                IdentifierRef::parse,
                 opt(map(
                     tuple((
                         opt(Separator::parse),
@@ -111,65 +158,149 @@ impl<'a> Parser<'a> for EnumValue<'a> {
     }
 }
 
-// Struct          ::=  'struct' Identifier '{' Field* '}'
 #[derive(Debug, Clone, PartialEq)]
-pub struct Struct<'a> {
-    pub name: Identifier<'a>,
-    pub fields: Vec<Field<'a>>,
+pub struct Enum {
+    pub name: Identifier,
+    pub children: Vec<EnumValue>,
 }
 
-impl<'a> Parser<'a> for Struct<'a> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumValue {
+    pub name: Identifier,
+    pub value: Option<IntConstant>,
+}
+
+impl<'a> From<EnumRef<'a>> for Enum {
+    fn from(r: EnumRef<'a>) -> Self {
+        Self {
+            name: r.name.into(),
+            children: r.children.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl<'a> From<EnumValueRef<'a>> for EnumValue {
+    fn from(r: EnumValueRef<'a>) -> Self {
+        Self {
+            name: r.name.into(),
+            value: r.value,
+        }
+    }
+}
+
+impl<'a> Parser<'a> for Enum {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        EnumRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
+impl<'a> Parser<'a> for EnumValue {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        EnumValueRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
+// Struct          ::=  'struct' Identifier '{' Field* '}'
+#[derive(Debug, Clone, PartialEq)]
+pub struct StructRef<'a> {
+    pub name: IdentifierRef<'a>,
+    pub fields: Vec<FieldRef<'a>>,
+}
+
+impl<'a> Parser<'a> for StructRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
                 pair(tag("struct"), Separator::parse),
-                Identifier::parse,
+                IdentifierRef::parse,
                 delimited(opt(Separator::parse), cchar('{'), opt(Separator::parse)),
-                separated_list0(Separator::parse, Field::parse),
+                separated_list0(Separator::parse, FieldRef::parse),
                 pair(opt(Separator::parse), cchar('}')),
             )),
             |(_, name, _, fields, _)| Self { name, fields },
         )(input)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Struct {
+    pub name: Identifier,
+    pub fields: Vec<Field>,
+}
+
+impl<'a> From<StructRef<'a>> for Struct {
+    fn from(r: StructRef<'a>) -> Self {
+        Self {
+            name: r.name.into(),
+            fields: r.fields.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for Struct {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        StructRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
     }
 }
 
 // Union          ::=  'union' Identifier '{' Field* '}'
 #[derive(Debug, Clone, PartialEq)]
-pub struct Union<'a> {
-    pub name: Identifier<'a>,
-    pub fields: Vec<Field<'a>>,
+pub struct UnionRef<'a> {
+    pub name: IdentifierRef<'a>,
+    pub fields: Vec<FieldRef<'a>>,
 }
 
-impl<'a> Parser<'a> for Union<'a> {
+impl<'a> Parser<'a> for UnionRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
                 pair(tag("union"), Separator::parse),
-                Identifier::parse,
+                IdentifierRef::parse,
                 delimited(opt(Separator::parse), cchar('{'), opt(Separator::parse)),
-                separated_list0(Separator::parse, Field::parse),
+                separated_list0(Separator::parse, FieldRef::parse),
                 pair(opt(Separator::parse), cchar('}')),
             )),
             |(_, name, _, fields, _)| Self { name, fields },
         )(input)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Union {
+    pub name: Identifier,
+    pub fields: Vec<Field>,
+}
+
+impl<'a> From<UnionRef<'a>> for Union {
+    fn from(r: UnionRef<'a>) -> Self {
+        Self {
+            name: r.name.into(),
+            fields: r.fields.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for Union {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        UnionRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
     }
 }
 
 // Exception       ::=  'exception' Identifier '{' Field* '}'
 #[derive(Debug, Clone, PartialEq)]
-pub struct Exception<'a> {
-    pub name: Identifier<'a>,
-    pub fields: Vec<Field<'a>>,
+pub struct ExceptionRef<'a> {
+    pub name: IdentifierRef<'a>,
+    pub fields: Vec<FieldRef<'a>>,
 }
 
-impl<'a> Parser<'a> for Exception<'a> {
+impl<'a> Parser<'a> for ExceptionRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
                 pair(tag("exception"), Separator::parse),
-                Identifier::parse,
+                IdentifierRef::parse,
                 delimited(opt(Separator::parse), cchar('{'), opt(Separator::parse)),
-                separated_list0(Separator::parse, Field::parse),
+                separated_list0(Separator::parse, FieldRef::parse),
                 pair(opt(Separator::parse), cchar('}')),
             )),
             |(_, name, _, fields, _)| Self { name, fields },
@@ -177,35 +308,56 @@ impl<'a> Parser<'a> for Exception<'a> {
     }
 }
 
-// Service         ::=  'service' Identifier ( 'extends' Identifier )? '{' Function* '}'
 #[derive(Debug, Clone, PartialEq)]
-pub struct Service<'a> {
-    pub name: Identifier<'a>,
-    pub extension: Option<Identifier<'a>>,
-    pub functions: Vec<Function<'a>>,
+pub struct Exception {
+    pub name: Identifier,
+    pub fields: Vec<Field>,
 }
 
-impl<'a> Parser<'a> for Service<'a> {
+impl<'a> From<ExceptionRef<'a>> for Exception {
+    fn from(r: ExceptionRef<'a>) -> Self {
+        Self {
+            name: r.name.into(),
+            fields: r.fields.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for Exception {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        ExceptionRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
+// Service         ::=  'service' Identifier ( 'extends' Identifier )? '{' Function* '}'
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServiceRef<'a> {
+    pub name: IdentifierRef<'a>,
+    pub extension: Option<IdentifierRef<'a>>,
+    pub functions: Vec<FunctionRef<'a>>,
+}
+
+impl<'a> Parser<'a> for ServiceRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             tuple((
                 delimited(
                     pair(tag("service"), Separator::parse),
-                    Identifier::parse,
+                    IdentifierRef::parse,
                     opt(Separator::parse),
                 ),
                 opt(map(
                     tuple((
                         tag("extends"),
                         Separator::parse,
-                        Identifier::parse,
+                        IdentifierRef::parse,
                         opt(Separator::parse),
                     )),
                     |(_, _, ext, _)| ext,
                 )),
                 delimited(
                     pair(cchar('{'), opt(Separator::parse)),
-                    separated_list0(Separator::parse, Function::parse),
+                    separated_list0(Separator::parse, FunctionRef::parse),
                     pair(opt(Separator::parse), cchar('}')),
                 ),
             )),
@@ -218,20 +370,45 @@ impl<'a> Parser<'a> for Service<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Service {
+    pub name: Identifier,
+    pub extension: Option<Identifier>,
+    pub functions: Vec<Function>,
+}
+
+impl<'a> From<ServiceRef<'a>> for Service {
+    fn from(r: ServiceRef<'a>) -> Self {
+        Self {
+            name: r.name.into(),
+            extension: r.extension.map(Into::into),
+            functions: r.functions.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for Service {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        ServiceRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::basic::Literal;
+    use crate::basic::LiteralRef;
 
     use super::*;
 
     #[test]
     fn test_const() {
         assert_eq!(
-            Const::parse("const bool is_rust_easy = 'yes!';").unwrap().1,
-            Const {
-                name: Identifier::from("is_rust_easy"),
-                type_: FieldType::Bool,
-                value: ConstValue::Literal(Literal::from("yes!"))
+            ConstRef::parse("const bool is_rust_easy = 'yes!';")
+                .unwrap()
+                .1,
+            ConstRef {
+                name: IdentifierRef::from("is_rust_easy"),
+                type_: FieldTypeRef::Bool,
+                value: ConstValueRef::Literal(LiteralRef::from("yes!"))
             }
         );
     }
@@ -239,69 +416,72 @@ mod test {
     #[test]
     fn test_typedef() {
         assert_eq!(
-            Typedef::parse("typedef i32 MyI32").unwrap().1,
-            Typedef {
-                old: FieldType::I32,
-                alias: Identifier::from("MyI32")
+            TypedefRef::parse("typedef i32 MyI32").unwrap().1,
+            TypedefRef {
+                old: FieldTypeRef::I32,
+                alias: IdentifierRef::from("MyI32")
             }
         );
     }
 
     #[test]
     fn test_enum() {
-        let expected = Enum {
-            name: Identifier::from("PL"),
+        let expected = EnumRef {
+            name: IdentifierRef::from("PL"),
             children: vec![
-                EnumValue {
-                    name: Identifier::from("Rust"),
+                EnumValueRef {
+                    name: IdentifierRef::from("Rust"),
                     value: None,
                 },
-                EnumValue {
-                    name: Identifier::from("Go"),
+                EnumValueRef {
+                    name: IdentifierRef::from("Go"),
                     value: Some(IntConstant::from(2)),
                 },
-                EnumValue {
-                    name: Identifier::from("Cpp"),
+                EnumValueRef {
+                    name: IdentifierRef::from("Cpp"),
                     value: Some(IntConstant::from(3)),
                 },
             ],
         };
         assert_eq!(
-            Enum::parse("enum PL { Rust Go=2 , Cpp = 3 }").unwrap().1,
+            EnumRef::parse("enum PL { Rust Go=2 , Cpp = 3 }").unwrap().1,
             expected
         );
-        assert_eq!(Enum::parse("enum PL{Rust Go=2,Cpp=3}").unwrap().1, expected);
+        assert_eq!(
+            EnumRef::parse("enum PL{Rust Go=2,Cpp=3}").unwrap().1,
+            expected
+        );
     }
 
     #[test]
     fn test_struct() {
-        let expected = Struct {
-            name: Identifier::from("user"),
+        let expected = StructRef {
+            name: IdentifierRef::from("user"),
             fields: vec![
-                Field {
+                FieldRef {
                     id: Some(IntConstant::from(1)),
                     required: Some(false),
-                    type_: FieldType::String,
-                    name: Identifier::from("name"),
+                    type_: FieldTypeRef::String,
+                    name: IdentifierRef::from("name"),
                     default: None,
                 },
-                Field {
+                FieldRef {
                     id: Some(IntConstant::from(2)),
                     required: None,
-                    type_: FieldType::I32,
-                    name: Identifier::from("age"),
-                    default: Some(ConstValue::Int(IntConstant::from(18))),
+                    type_: FieldTypeRef::I32,
+                    name: IdentifierRef::from("age"),
+                    default: Some(ConstValueRef::Int(IntConstant::from(18))),
                 },
             ],
         };
         assert_eq!(
-            Struct::parse("struct user{1:optional string name; 2:i32 age=18}")
+            StructRef::parse("struct user{1:optional string name; 2:i32 age=18}")
                 .unwrap()
                 .1,
             expected
         );
         assert_eq!(
-            Struct::parse("struct user { 1 : optional string name ; 2 : i32 age = 18 }")
+            StructRef::parse("struct user { 1 : optional string name ; 2 : i32 age = 18 }")
                 .unwrap()
                 .1,
             expected
@@ -310,26 +490,26 @@ mod test {
 
     #[test]
     fn test_service() {
-        let function = Function {
+        let function = FunctionRef {
             oneway: false,
-            returns: Some(FieldType::String),
-            name: Identifier::from("GetUser"),
-            parameters: vec![Field {
+            returns: Some(FieldTypeRef::String),
+            name: IdentifierRef::from("GetUser"),
+            parameters: vec![FieldRef {
                 id: None,
                 required: Some(true),
-                type_: FieldType::String,
-                name: Identifier::from("name"),
+                type_: FieldTypeRef::String,
+                name: IdentifierRef::from("name"),
                 default: None,
             }],
             exceptions: None,
         };
-        let expected = Service {
-            name: Identifier::from("DemoService"),
-            extension: Some(Identifier::from("BaseService")),
+        let expected = ServiceRef {
+            name: IdentifierRef::from("DemoService"),
+            extension: Some(IdentifierRef::from("BaseService")),
             functions: vec![function.clone(), function],
         };
         assert_eq!(
-            Service::parse(
+            ServiceRef::parse(
                 "service DemoService extends BaseService { \
          string GetUser(required string name),
          string GetUser(required string name) }"

@@ -7,30 +7,59 @@ use nom::multi::separated_list0;
 use nom::sequence::{delimited, pair, separated_pair, tuple};
 use nom::IResult;
 
-use crate::basic::{Identifier, ListSeparator, Literal, Separator};
+use crate::basic::{Identifier, IdentifierRef, ListSeparator, Literal, LiteralRef, Separator};
 use crate::Parser;
 
 // ConstValue      ::=  IntConstant | DoubleConstant | Literal | Identifier | ConstList | ConstMap
 #[derive(Debug, Clone, PartialEq)]
-pub enum ConstValue<'a> {
-    Identifier(Identifier<'a>),
-    Literal(Literal<'a>),
+pub enum ConstValueRef<'a> {
+    Identifier(IdentifierRef<'a>),
+    Literal(LiteralRef<'a>),
     Double(DoubleConstant),
     Int(IntConstant),
-    List(ConstList<'a>),
-    Map(ConstMap<'a>),
+    List(ConstListRef<'a>),
+    Map(ConstMapRef<'a>),
 }
 
-impl<'a> Parser<'a> for ConstValue<'a> {
+impl<'a> Parser<'a> for ConstValueRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         alt((
-            map(Identifier::parse, ConstValue::Identifier),
-            map(Literal::parse, ConstValue::Literal),
-            map(DoubleConstant::parse2, ConstValue::Double),
-            map(IntConstant::parse, ConstValue::Int),
-            map(ConstList::parse, ConstValue::List),
-            map(ConstMap::parse, ConstValue::Map),
+            map(IdentifierRef::parse, ConstValueRef::Identifier),
+            map(LiteralRef::parse, ConstValueRef::Literal),
+            map(DoubleConstant::parse2, ConstValueRef::Double),
+            map(IntConstant::parse, ConstValueRef::Int),
+            map(ConstListRef::parse, ConstValueRef::List),
+            map(ConstMapRef::parse, ConstValueRef::Map),
         ))(input)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstValue {
+    Identifier(Identifier),
+    Literal(Literal),
+    Double(DoubleConstant),
+    Int(IntConstant),
+    List(ConstList),
+    Map(ConstMap),
+}
+
+impl<'a> From<ConstValueRef<'a>> for ConstValue {
+    fn from(r: ConstValueRef<'a>) -> Self {
+        match r {
+            ConstValueRef::Identifier(i) => Self::Identifier(i.into()),
+            ConstValueRef::Literal(i) => Self::Literal(i.into()),
+            ConstValueRef::Double(i) => Self::Double(i),
+            ConstValueRef::Int(i) => Self::Int(i),
+            ConstValueRef::List(i) => Self::List(i.into()),
+            ConstValueRef::Map(i) => Self::Map(i.into()),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for ConstValue {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        ConstValueRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
     }
 }
 
@@ -99,14 +128,14 @@ impl PartialEq for DoubleConstant {
 
 // ConstList       ::=  '[' (ConstValue ListSeparator?)* ']'
 #[derive(derive_newtype::NewType, PartialEq, Debug, Clone)]
-pub struct ConstList<'a>(Vec<ConstValue<'a>>);
+pub struct ConstListRef<'a>(Vec<ConstValueRef<'a>>);
 
-impl<'a> Parser<'a> for ConstList<'a> {
+impl<'a> Parser<'a> for ConstListRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             delimited(
                 pair(cchar('['), opt(Separator::parse)),
-                separated_list0(parse_list_separator, ConstValue::parse),
+                separated_list0(parse_list_separator, ConstValueRef::parse),
                 pair(opt(Separator::parse), cchar(']')),
             ),
             Self,
@@ -114,11 +143,26 @@ impl<'a> Parser<'a> for ConstList<'a> {
     }
 }
 
+#[derive(derive_newtype::NewType, PartialEq, Debug, Clone)]
+pub struct ConstList(Vec<ConstValue>);
+
+impl<'a> From<ConstListRef<'a>> for ConstList {
+    fn from(r: ConstListRef<'a>) -> Self {
+        Self(r.0.into_iter().map(Into::into).collect())
+    }
+}
+
+impl<'a> Parser<'a> for ConstList {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        ConstListRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
 // ConstMap        ::=  '{' (ConstValue ':' ConstValue ListSeparator?)* '}'
 #[derive(derive_newtype::NewType, PartialEq, Debug, Clone)]
-pub struct ConstMap<'a>(Vec<(ConstValue<'a>, ConstValue<'a>)>);
+pub struct ConstMapRef<'a>(Vec<(ConstValueRef<'a>, ConstValueRef<'a>)>);
 
-impl<'a> Parser<'a> for ConstMap<'a> {
+impl<'a> Parser<'a> for ConstMapRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             delimited(
@@ -126,15 +170,30 @@ impl<'a> Parser<'a> for ConstMap<'a> {
                 separated_list0(
                     parse_list_separator,
                     separated_pair(
-                        ConstValue::parse,
+                        ConstValueRef::parse,
                         delimited(opt(Separator::parse), cchar(':'), opt(Separator::parse)),
-                        ConstValue::parse,
+                        ConstValueRef::parse,
                     ),
                 ),
                 pair(opt(Separator::parse), cchar('}')),
             ),
             Self,
         )(input)
+    }
+}
+
+#[derive(derive_newtype::NewType, PartialEq, Debug, Clone)]
+pub struct ConstMap(Vec<(ConstValue, ConstValue)>);
+
+impl<'a> From<ConstMapRef<'a>> for ConstMap {
+    fn from(r: ConstMapRef<'a>) -> Self {
+        Self(r.0.into_iter().map(|(a, b)| (a.into(), b.into())).collect())
+    }
+}
+
+impl<'a> Parser<'a> for ConstMap {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        ConstMapRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
     }
 }
 
@@ -216,27 +275,27 @@ mod test {
             ],
             vec![
                 vec![
-                    ConstValue::Int(IntConstant(1)),
-                    ConstValue::Int(IntConstant(3)),
-                    ConstValue::Int(IntConstant(5)),
-                    ConstValue::Int(IntConstant(6)),
-                    ConstValue::Int(IntConstant(7)),
-                    ConstValue::Identifier(Identifier::from("ihciah")),
-                    ConstValue::Double(DoubleConstant(1.1)),
+                    ConstValueRef::Int(IntConstant(1)),
+                    ConstValueRef::Int(IntConstant(3)),
+                    ConstValueRef::Int(IntConstant(5)),
+                    ConstValueRef::Int(IntConstant(6)),
+                    ConstValueRef::Int(IntConstant(7)),
+                    ConstValueRef::Identifier(IdentifierRef::from("ihciah")),
+                    ConstValueRef::Double(DoubleConstant(1.1)),
                 ],
                 vec![
-                    ConstValue::Int(IntConstant(6)),
-                    ConstValue::Int(IntConstant(7)),
-                    ConstValue::Identifier(Identifier::from("ihciah")),
-                    ConstValue::Double(DoubleConstant(1.1)),
-                    ConstValue::Identifier(Identifier::from("A")),
+                    ConstValueRef::Int(IntConstant(6)),
+                    ConstValueRef::Int(IntConstant(7)),
+                    ConstValueRef::Identifier(IdentifierRef::from("ihciah")),
+                    ConstValueRef::Double(DoubleConstant(1.1)),
+                    ConstValueRef::Identifier(IdentifierRef::from("A")),
                 ],
                 vec![],
             ],
-            ConstList::parse,
-            ConstList,
+            ConstListRef::parse,
+            ConstListRef,
         );
-        assert_list_err_with_f(vec!["[1,2,3A]"], ConstList::parse);
+        assert_list_err_with_f(vec!["[1,2,3A]"], ConstListRef::parse);
     }
 
     #[test]
@@ -246,19 +305,19 @@ mod test {
             vec![
                 vec![
                     (
-                        ConstValue::Int(IntConstant(1)),
-                        ConstValue::Int(IntConstant(2)),
+                        ConstValueRef::Int(IntConstant(1)),
+                        ConstValueRef::Int(IntConstant(2)),
                     ),
                     (
-                        ConstValue::Int(IntConstant(3)),
-                        ConstValue::Int(IntConstant(4)),
+                        ConstValueRef::Int(IntConstant(3)),
+                        ConstValueRef::Int(IntConstant(4)),
                     ),
                 ],
                 vec![],
             ],
-            ConstMap::parse,
-            ConstMap,
+            ConstMapRef::parse,
+            ConstMapRef,
         );
-        assert_list_err_with_f(vec!["{1:34:5}"], ConstMap::parse);
+        assert_list_err_with_f(vec!["{1:34:5}"], ConstMapRef::parse);
     }
 }

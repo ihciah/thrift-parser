@@ -5,7 +5,7 @@ use nom::combinator::{map, opt};
 use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
-use crate::basic::{Identifier, Literal, Separator};
+use crate::basic::{Identifier, IdentifierRef, Literal, LiteralRef, Separator};
 use crate::Parser;
 
 // FieldType       ::=  Identifier | BaseType | ContainerType
@@ -17,8 +17,8 @@ use crate::Parser;
 // CppType         ::=  'cpp_type' Literal
 // Note: CppType is not fully supported in out impl.
 #[derive(Debug, Clone, PartialEq)]
-pub enum FieldType<'a> {
-    Identifier(Identifier<'a>),
+pub enum FieldTypeRef<'a> {
+    Identifier(IdentifierRef<'a>),
     Bool,
     Byte,
     I8,
@@ -28,12 +28,12 @@ pub enum FieldType<'a> {
     Double,
     String,
     Binary,
-    Map(Box<FieldType<'a>>, Box<FieldType<'a>>),
-    Set(Box<FieldType<'a>>),
-    List(Box<FieldType<'a>>),
+    Map(Box<FieldTypeRef<'a>>, Box<FieldTypeRef<'a>>),
+    Set(Box<FieldTypeRef<'a>>),
+    List(Box<FieldTypeRef<'a>>),
 }
 
-impl<'a> FieldType<'a> {
+impl<'a> FieldTypeRef<'a> {
     pub fn parse_base_type(input: &'a str) -> IResult<&'a str, Self> {
         alt((
             map(tag("bool"), |_| Self::Bool),
@@ -55,14 +55,14 @@ impl<'a> FieldType<'a> {
                     tuple((
                         tag("map"),
                         opt(Separator::parse),
-                        opt(terminated(CppType::parse, opt(Separator::parse))),
+                        opt(terminated(CppTypeRef::parse, opt(Separator::parse))),
                     )),
                     delimited(
                         pair(cchar('<'), opt(Separator::parse)),
                         separated_pair(
-                            FieldType::parse,
+                            FieldTypeRef::parse,
                             tuple((opt(Separator::parse), cchar(','), opt(Separator::parse))),
-                            FieldType::parse,
+                            FieldTypeRef::parse,
                         ),
                         pair(opt(Separator::parse), cchar('>')),
                     ),
@@ -74,11 +74,11 @@ impl<'a> FieldType<'a> {
                     tuple((
                         tag("set"),
                         opt(Separator::parse),
-                        opt(terminated(CppType::parse, opt(Separator::parse))),
+                        opt(terminated(CppTypeRef::parse, opt(Separator::parse))),
                     )),
                     delimited(
                         pair(cchar('<'), opt(Separator::parse)),
-                        FieldType::parse,
+                        FieldTypeRef::parse,
                         pair(opt(Separator::parse), cchar('>')),
                     ),
                 ),
@@ -89,23 +89,23 @@ impl<'a> FieldType<'a> {
                     pair(tag("list"), opt(Separator::parse)),
                     delimited(
                         pair(cchar('<'), opt(Separator::parse)),
-                        FieldType::parse,
+                        FieldTypeRef::parse,
                         pair(opt(Separator::parse), cchar('>')),
                     ),
-                    opt(pair(opt(Separator::parse), CppType::parse)),
+                    opt(pair(opt(Separator::parse), CppTypeRef::parse)),
                 ),
                 |v| Self::List(Box::new(v)),
             ),
-            map(Identifier::parse, Self::Identifier),
+            map(IdentifierRef::parse, Self::Identifier),
         ))(input)
     }
 
     pub fn parse_identifier_type(input: &'a str) -> IResult<&'a str, Self> {
-        map(Identifier::parse, Self::Identifier)(input)
+        map(IdentifierRef::parse, Self::Identifier)(input)
     }
 }
 
-impl<'a> Parser<'a> for FieldType<'a> {
+impl<'a> Parser<'a> for FieldTypeRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         alt((
             Self::parse_base_type,
@@ -115,16 +115,100 @@ impl<'a> Parser<'a> for FieldType<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum FieldType {
+    Identifier(Identifier),
+    Bool,
+    Byte,
+    I8,
+    I16,
+    I32,
+    I64,
+    Double,
+    String,
+    Binary,
+    Map(Box<FieldType>, Box<FieldType>),
+    Set(Box<FieldType>),
+    List(Box<FieldType>),
+}
+
+impl<'a> From<FieldTypeRef<'a>> for FieldType {
+    fn from(r: FieldTypeRef<'a>) -> Self {
+        match r {
+            FieldTypeRef::Identifier(i) => FieldType::Identifier(i.into()),
+            FieldTypeRef::Bool => FieldType::Bool,
+            FieldTypeRef::Byte => FieldType::Byte,
+            FieldTypeRef::I8 => FieldType::I8,
+            FieldTypeRef::I16 => FieldType::I16,
+            FieldTypeRef::I32 => FieldType::I32,
+            FieldTypeRef::I64 => FieldType::I64,
+            FieldTypeRef::Double => FieldType::Double,
+            FieldTypeRef::String => FieldType::String,
+            FieldTypeRef::Binary => FieldType::Binary,
+            FieldTypeRef::Map(k, v) => {
+                FieldType::Map(Box::new(k.as_ref().into()), Box::new(v.as_ref().into()))
+            }
+            FieldTypeRef::Set(v) => FieldType::Set(Box::new(v.as_ref().into())),
+            FieldTypeRef::List(v) => FieldType::List(Box::new(v.as_ref().into())),
+        }
+    }
+}
+
+impl<'a> From<&FieldTypeRef<'a>> for FieldType {
+    fn from(r: &FieldTypeRef<'a>) -> Self {
+        match r {
+            FieldTypeRef::Identifier(i) => FieldType::Identifier(i.clone().into()),
+            FieldTypeRef::Bool => FieldType::Bool,
+            FieldTypeRef::Byte => FieldType::Byte,
+            FieldTypeRef::I8 => FieldType::I8,
+            FieldTypeRef::I16 => FieldType::I16,
+            FieldTypeRef::I32 => FieldType::I32,
+            FieldTypeRef::I64 => FieldType::I64,
+            FieldTypeRef::Double => FieldType::Double,
+            FieldTypeRef::String => FieldType::String,
+            FieldTypeRef::Binary => FieldType::Binary,
+            FieldTypeRef::Map(k, v) => {
+                FieldType::Map(Box::new(k.as_ref().into()), Box::new(v.as_ref().into()))
+            }
+            FieldTypeRef::Set(v) => FieldType::Set(Box::new(v.as_ref().into())),
+            FieldTypeRef::List(v) => FieldType::List(Box::new(v.as_ref().into())),
+        }
+    }
+}
+
+impl<'a> Parser<'a> for FieldType {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        FieldTypeRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
 // CppType         ::=  'cpp_type' Literal
 #[derive(derive_newtype::NewType, Eq, PartialEq, Debug, Clone)]
-pub struct CppType<'a>(Literal<'a>);
+pub struct CppTypeRef<'a>(LiteralRef<'a>);
 
-impl<'a> Parser<'a> for CppType<'a> {
+impl<'a> Parser<'a> for CppTypeRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
-            preceded(tag("cpp_type"), preceded(Separator::parse, Literal::parse)),
+            preceded(
+                tag("cpp_type"),
+                preceded(Separator::parse, LiteralRef::parse),
+            ),
             Self,
         )(input)
+    }
+}
+#[derive(derive_newtype::NewType, Eq, PartialEq, Debug, Clone)]
+pub struct CppType(Literal);
+
+impl<'a> From<CppTypeRef<'a>> for CppType {
+    fn from(r: CppTypeRef<'a>) -> Self {
+        Self(r.0.into())
+    }
+}
+
+impl<'a> Parser<'a> for CppType {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        CppTypeRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
     }
 }
 
@@ -138,9 +222,9 @@ mod test {
     fn test_cpp_type() {
         assert_list_eq_with_f(
             vec!["cpp_type \"MINI-LUST\"", "cpp_type 'ihciah'"],
-            vec![Literal::from("MINI-LUST"), Literal::from("ihciah")],
-            CppType::parse,
-            CppType,
+            vec![LiteralRef::from("MINI-LUST"), LiteralRef::from("ihciah")],
+            CppTypeRef::parse,
+            CppTypeRef,
         );
     }
 
@@ -148,37 +232,37 @@ mod test {
     fn test_field_type() {
         assert_list_eq_with_f(
             vec!["bool", "i16"],
-            vec![FieldType::Bool, FieldType::I16],
-            FieldType::parse,
+            vec![FieldTypeRef::Bool, FieldTypeRef::I16],
+            FieldTypeRef::parse,
             |x| x,
         );
         assert_eq!(
-            FieldType::parse("map <bool, bool>").unwrap().1,
-            FieldType::Map(Box::new(FieldType::Bool), Box::new(FieldType::Bool))
+            FieldTypeRef::parse("map <bool, bool>").unwrap().1,
+            FieldTypeRef::Map(Box::new(FieldTypeRef::Bool), Box::new(FieldTypeRef::Bool))
         );
         assert_eq!(
-            FieldType::parse("map<bool,bool>").unwrap().1,
-            FieldType::Map(Box::new(FieldType::Bool), Box::new(FieldType::Bool))
+            FieldTypeRef::parse("map<bool,bool>").unwrap().1,
+            FieldTypeRef::Map(Box::new(FieldTypeRef::Bool), Box::new(FieldTypeRef::Bool))
         );
         assert_eq!(
-            FieldType::parse("set <bool>").unwrap().1,
-            FieldType::Set(Box::new(FieldType::Bool))
+            FieldTypeRef::parse("set <bool>").unwrap().1,
+            FieldTypeRef::Set(Box::new(FieldTypeRef::Bool))
         );
         assert_eq!(
-            FieldType::parse("set<bool>").unwrap().1,
-            FieldType::Set(Box::new(FieldType::Bool))
+            FieldTypeRef::parse("set<bool>").unwrap().1,
+            FieldTypeRef::Set(Box::new(FieldTypeRef::Bool))
         );
         assert_eq!(
-            FieldType::parse("list <bool>").unwrap().1,
-            FieldType::List(Box::new(FieldType::Bool))
+            FieldTypeRef::parse("list <bool>").unwrap().1,
+            FieldTypeRef::List(Box::new(FieldTypeRef::Bool))
         );
         assert_eq!(
-            FieldType::parse("list<bool>").unwrap().1,
-            FieldType::List(Box::new(FieldType::Bool))
+            FieldTypeRef::parse("list<bool>").unwrap().1,
+            FieldTypeRef::List(Box::new(FieldTypeRef::Bool))
         );
         assert_eq!(
-            FieldType::parse("ihc_iah").unwrap().1,
-            FieldType::Identifier(Identifier::from("ihc_iah"))
+            FieldTypeRef::parse("ihc_iah").unwrap().1,
+            FieldTypeRef::Identifier(IdentifierRef::from("ihc_iah"))
         );
     }
 }

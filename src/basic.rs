@@ -10,9 +10,9 @@ use crate::Parser;
 
 // Literal         ::=  ('"' [^"]* '"') | ("'" [^']* "'")
 #[derive(derive_newtype::NewType, Eq, PartialEq, Debug, Clone)]
-pub struct Literal<'a>(&'a str);
+pub struct LiteralRef<'a>(&'a str);
 
-impl<'a> Parser<'a> for Literal<'a> {
+impl<'a> Parser<'a> for LiteralRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             alt((
@@ -24,11 +24,26 @@ impl<'a> Parser<'a> for Literal<'a> {
     }
 }
 
+#[derive(derive_newtype::NewType, Eq, PartialEq, Debug, Clone)]
+pub struct Literal(String);
+
+impl<'a> From<LiteralRef<'a>> for Literal {
+    fn from(r: LiteralRef<'a>) -> Self {
+        Self(r.0.into())
+    }
+}
+
+impl<'a> Parser<'a> for Literal {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        LiteralRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
 // Identifier      ::=  ( Letter | '_' ) ( Letter | Digit | '.' | '_' )*
 #[derive(derive_newtype::NewType, Eq, PartialEq, Debug, Clone)]
-pub struct Identifier<'a>(&'a str);
+pub struct IdentifierRef<'a>(&'a str);
 
-impl<'a> Parser<'a> for Identifier<'a> {
+impl<'a> Parser<'a> for IdentifierRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             recognize(tuple((
@@ -38,6 +53,21 @@ impl<'a> Parser<'a> for Identifier<'a> {
             ))),
             Self,
         )(input)
+    }
+}
+
+#[derive(derive_newtype::NewType, Eq, PartialEq, Debug, Clone)]
+pub struct Identifier(String);
+
+impl<'a> From<IdentifierRef<'a>> for Identifier {
+    fn from(r: IdentifierRef<'a>) -> Self {
+        Self(r.0.into())
+    }
+}
+
+impl<'a> Parser<'a> for Identifier {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        IdentifierRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
     }
 }
 
@@ -54,9 +84,9 @@ impl<'a> Parser<'a> for ListSeparator {
 // 1. The line begins with // or #
 // 2. The content between /* and */
 #[derive(Eq, PartialEq, Debug, Clone)]
-pub struct Comment<'a>(&'a str);
+pub struct CommentRef<'a>(&'a str);
 
-impl<'a> Parser<'a> for Comment<'a> {
+impl<'a> Parser<'a> for CommentRef<'a> {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
             alt((
@@ -69,6 +99,21 @@ impl<'a> Parser<'a> for Comment<'a> {
     }
 }
 
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct Comment(String);
+
+impl<'a> From<CommentRef<'a>> for Comment {
+    fn from(r: CommentRef<'a>) -> Self {
+        Self(r.0.into())
+    }
+}
+
+impl<'a> Parser<'a> for Comment {
+    fn parse(input: &'a str) -> IResult<&'a str, Self> {
+        CommentRef::parse(input).map(|(remains, parsed)| (remains, parsed.into()))
+    }
+}
+
 // 1. Comment
 // 2. Space
 #[derive(Eq, PartialEq, Debug, Copy, Clone)]
@@ -77,7 +122,10 @@ pub struct Separator;
 impl<'a> Parser<'a> for Separator {
     fn parse(input: &'a str) -> IResult<&'a str, Self> {
         map(
-            many1(alt((map(Comment::parse, |_| ()), map(multispace1, |_| ())))),
+            many1(alt((
+                map(CommentRef::parse, |_| ()),
+                map(multispace1, |_| ()),
+            ))),
             |_| Self,
         )(input)
     }
@@ -99,10 +147,10 @@ mod test {
                 "\"ihcia'h\"''''",
             ],
             vec!["ihciah", "ihcia\"h", "ihciah", "ihcia'h"],
-            Literal::parse,
-            Literal,
+            LiteralRef::parse,
+            LiteralRef,
         );
-        assert_list_err_with_f(vec!["'ihcia\"aa"], Literal::parse);
+        assert_list_err_with_f(vec!["'ihcia\"aa"], LiteralRef::parse);
     }
 
     #[test]
@@ -110,10 +158,10 @@ mod test {
         assert_list_eq_with_f(
             vec!["_ihc123iah,", "ihc123iah,"],
             vec!["_ihc123iah", "ihc123iah"],
-            Identifier::parse,
-            Identifier,
+            IdentifierRef::parse,
+            IdentifierRef,
         );
-        assert_list_err_with_f(vec!["_123", "_", "123"], Identifier::parse);
+        assert_list_err_with_f(vec!["_123", "_", "123"], IdentifierRef::parse);
     }
 
     #[test]
@@ -137,8 +185,8 @@ mod test {
                 "ihciah's ///#content",
                 "ihciah's con@#tent",
             ],
-            Comment::parse,
-            Comment,
+            CommentRef::parse,
+            CommentRef,
         );
     }
 }
