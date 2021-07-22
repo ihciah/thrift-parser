@@ -4,8 +4,8 @@ use nom::IResult;
 #[cfg(test)]
 #[allow(unused)]
 pub fn assert_pair_eq<T>(input: IResult<&str, T>, expected: T)
-    where
-        T: PartialEq + std::fmt::Debug,
+where
+    T: PartialEq + std::fmt::Debug,
 {
     assert!(input.is_ok());
     assert_eq!(input.unwrap().1, expected);
@@ -14,10 +14,10 @@ pub fn assert_pair_eq<T>(input: IResult<&str, T>, expected: T)
 #[cfg(test)]
 #[allow(unused)]
 pub fn assert_list_eq<'a, T, IR, IT>(input: IR, expected: IT)
-    where
-        IR: IntoIterator<Item = IResult<&'a str, T>>,
-        IT: IntoIterator<Item = T>,
-        T: PartialEq + std::fmt::Debug,
+where
+    IR: IntoIterator<Item = IResult<&'a str, T>>,
+    IT: IntoIterator<Item = T>,
+    T: PartialEq + std::fmt::Debug,
 {
     input
         .into_iter()
@@ -28,8 +28,8 @@ pub fn assert_list_eq<'a, T, IR, IT>(input: IR, expected: IT)
 #[cfg(test)]
 #[allow(unused)]
 pub fn assert_err<T>(input: IResult<&str, T>)
-    where
-        T: PartialEq + std::fmt::Debug,
+where
+    T: PartialEq + std::fmt::Debug,
 {
     assert!(input.is_err());
 }
@@ -37,9 +37,9 @@ pub fn assert_err<T>(input: IResult<&str, T>)
 #[cfg(test)]
 #[allow(unused)]
 pub fn assert_list_err<'a, T, IR>(input: IR)
-    where
-        IR: IntoIterator<Item = IResult<&'a str, T>>,
-        T: PartialEq + std::fmt::Debug,
+where
+    IR: IntoIterator<Item = IResult<&'a str, T>>,
+    T: PartialEq + std::fmt::Debug,
 {
     input.into_iter().for_each(|i| assert_err(i));
 }
@@ -67,10 +67,10 @@ pub fn assert_list_eq_with_f<'a, T, IS, ES, ISI, ESI, IF, EF>(
 #[cfg(test)]
 #[allow(unused)]
 pub fn assert_list_err_with_f<'a, T, IS, ISI, IF>(input: IS, input_f: IF)
-    where
-        T: PartialEq + std::fmt::Debug,
-        IS: IntoIterator<Item = ISI>,
-        IF: Fn(ISI) -> IResult<&'a str, T>,
+where
+    T: PartialEq + std::fmt::Debug,
+    IS: IntoIterator<Item = ISI>,
+    IF: Fn(ISI) -> IResult<&'a str, T>,
 {
     input.into_iter().for_each(|i| assert_err(input_f(i)))
 }

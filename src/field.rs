@@ -60,8 +60,9 @@ impl<'a> Parser<'a> for Field<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::basic::Literal;
+
+    use super::*;
 
     #[test]
     fn test_field() {
@@ -70,19 +71,35 @@ mod test {
             required: Some(true),
             type_: FieldType::String,
             name: Identifier::from("name"),
-            default: Some(ConstValue::Literal(Literal::from("ihciah")))
+            default: Some(ConstValue::Literal(Literal::from("ihciah"))),
         };
-        assert_eq!(Field::parse("required  string  name  =  'ihciah'").unwrap().1, expected);
-        assert_eq!(Field::parse("required string name='ihciah';").unwrap().1, expected);
+        assert_eq!(
+            Field::parse("required  string  name  =  'ihciah'")
+                .unwrap()
+                .1,
+            expected
+        );
+        assert_eq!(
+            Field::parse("required string name='ihciah';").unwrap().1,
+            expected
+        );
 
         let expected = Field {
             id: Some(IntConstant::from(3)),
             required: Some(true),
             type_: FieldType::String,
             name: Identifier::from("name"),
-            default: Some(ConstValue::Literal(Literal::from("ihciah")))
+            default: Some(ConstValue::Literal(Literal::from("ihciah"))),
         };
-        assert_eq!(Field::parse("3 : required  string  name  =  'ihciah'").unwrap().1, expected);
-        assert_eq!(Field::parse("3:required string name='ihciah';").unwrap().1, expected);
+        assert_eq!(
+            Field::parse("3 : required  string  name  =  'ihciah'")
+                .unwrap()
+                .1,
+            expected
+        );
+        assert_eq!(
+            Field::parse("3:required string name='ihciah';").unwrap().1,
+            expected
+        );
     }
 }

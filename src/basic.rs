@@ -85,8 +85,9 @@ impl<'a> Parser<'a> for Separator {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::utils::*;
+
+    use super::*;
 
     #[test]
     fn test_literal() {
@@ -124,8 +125,18 @@ mod test {
     #[test]
     fn test_comment() {
         assert_list_eq_with_f(
-            vec!["//ihciah's #content", "//ihciah's #content balabala\nNextLine", "#ihciah's ///#content", "/*ihciah's con@#tent*///aaa"],
-            vec!["ihciah's #content", "ihciah's #content balabala", "ihciah's ///#content", "ihciah's con@#tent"],
+            vec![
+                "//ihciah's #content",
+                "//ihciah's #content balabala\nNextLine",
+                "#ihciah's ///#content",
+                "/*ihciah's con@#tent*///aaa",
+            ],
+            vec![
+                "ihciah's #content",
+                "ihciah's #content balabala",
+                "ihciah's ///#content",
+                "ihciah's con@#tent",
+            ],
             Comment::parse,
             Comment,
         );

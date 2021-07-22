@@ -2,7 +2,7 @@ use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::char as cchar;
 use nom::combinator::{map, opt};
-use nom::sequence::{delimited, pair, preceded, terminated, tuple, separated_pair};
+use nom::sequence::{delimited, pair, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
 use crate::basic::{Identifier, Literal, Separator};
@@ -54,16 +54,16 @@ impl<'a> FieldType<'a> {
                 preceded(
                     tuple((
                         tag("map"),
-                        Separator::parse,
-                        opt(terminated(CppType::parse, Separator::parse)),
+                        opt(Separator::parse),
+                        opt(terminated(CppType::parse, opt(Separator::parse))),
                     )),
                     delimited(
                         pair(cchar('<'), opt(Separator::parse)),
-                            separated_pair(
-                                FieldType::parse,
-                                tuple((opt(Separator::parse), cchar(','), opt(Separator::parse))),
-                                FieldType::parse,
-                            ),
+                        separated_pair(
+                            FieldType::parse,
+                            tuple((opt(Separator::parse), cchar(','), opt(Separator::parse))),
+                            FieldType::parse,
+                        ),
                         pair(opt(Separator::parse), cchar('>')),
                     ),
                 ),
@@ -73,8 +73,8 @@ impl<'a> FieldType<'a> {
                 preceded(
                     tuple((
                         tag("set"),
-                        Separator::parse,
-                        opt(terminated(CppType::parse, Separator::parse)),
+                        opt(Separator::parse),
+                        opt(terminated(CppType::parse, opt(Separator::parse))),
                     )),
                     delimited(
                         pair(cchar('<'), opt(Separator::parse)),
@@ -157,11 +157,23 @@ mod test {
             FieldType::Map(Box::new(FieldType::Bool), Box::new(FieldType::Bool))
         );
         assert_eq!(
+            FieldType::parse("map<bool,bool>").unwrap().1,
+            FieldType::Map(Box::new(FieldType::Bool), Box::new(FieldType::Bool))
+        );
+        assert_eq!(
             FieldType::parse("set <bool>").unwrap().1,
             FieldType::Set(Box::new(FieldType::Bool))
         );
         assert_eq!(
+            FieldType::parse("set<bool>").unwrap().1,
+            FieldType::Set(Box::new(FieldType::Bool))
+        );
+        assert_eq!(
             FieldType::parse("list <bool>").unwrap().1,
+            FieldType::List(Box::new(FieldType::Bool))
+        );
+        assert_eq!(
+            FieldType::parse("list<bool>").unwrap().1,
             FieldType::List(Box::new(FieldType::Bool))
         );
         assert_eq!(

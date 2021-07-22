@@ -59,8 +59,9 @@ impl<'a> Parser<'a> for Document<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::basic::Literal;
+
+    use super::*;
 
     #[test]
     fn test_document() {
@@ -68,6 +69,9 @@ mod tests {
             includes: vec![Include::from(Literal::from("another.thrift"))],
             ..Default::default()
         };
-        assert_eq!(Document::parse("include 'another.thrift'").unwrap().1, expected);
+        assert_eq!(
+            Document::parse("include 'another.thrift'").unwrap().1,
+            expected
+        );
     }
 }

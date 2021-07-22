@@ -106,10 +106,7 @@ impl<'a> Parser<'a> for ConstList<'a> {
         map(
             delimited(
                 pair(cchar('['), opt(Separator::parse)),
-                separated_list0(
-                    parse_list_separator,
-                    ConstValue::parse
-                ),
+                separated_list0(parse_list_separator, ConstValue::parse),
                 pair(opt(Separator::parse), cchar(']')),
             ),
             Self,

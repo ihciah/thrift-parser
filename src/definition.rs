@@ -220,8 +220,9 @@ impl<'a> Parser<'a> for Service<'a> {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::basic::Literal;
+
+    use super::*;
 
     #[test]
     fn test_const() {

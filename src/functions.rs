@@ -32,10 +32,7 @@ impl<'a> Parser<'a> for Function<'a> {
                     x.is_some()
                 }),
                 terminated(
-                    alt((
-                        map(tag("void"), |_| None),
-                        map(FieldType::parse, Some),
-                    )),
+                    alt((map(tag("void"), |_| None), map(FieldType::parse, Some))),
                     Separator::parse,
                 ),
                 terminated(Identifier::parse, opt(Separator::parse)),
