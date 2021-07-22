@@ -1,8 +1,3 @@
-# Thrift Parser
-Yet another thrift parser powered by nom.
-
-## Example
-```rust
 use std::str::FromStr;
 
 use thrift_parser::Parser;
@@ -15,4 +10,3 @@ fn main() {
     let (remains, document) = thrift_parser::document::Document::parse(&idl).unwrap();
     println!("Parser remains: {:?}, document: {:?}", remains, document);
 }
-```
