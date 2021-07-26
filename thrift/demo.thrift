@@ -1,4 +1,4 @@
-namespace rust demo
+namespace rs demo
 
 struct A {
     1: required i32 user_id,

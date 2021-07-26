@@ -73,9 +73,10 @@ pub struct NamespaceRef<'a> {
     pub name: IdentifierRef<'a>,
 }
 
-// NamespaceScope  ::=  '*' | 'c_glib' | 'rust' | 'cpp' | 'delphi' | 'haxe' | 'go' | 'java' |
+// NamespaceScope  ::=  '*' | 'c_glib' | 'rs' | 'cpp' | 'delphi' | 'haxe' | 'go' | 'java' |
 // 'js' | 'lua' | 'netstd' | 'perl' | 'php' | 'py' | 'py.twisted' | 'rb' | 'st' | 'xsd'
 // We add rust into it.
+// Ref: https://github.com/apache/thrift/blob/master/lib/rs/test_recursive/src/transit/Transporters.thrift
 #[derive(derive_newtype::NewType, Eq, PartialEq, Debug, Clone)]
 pub struct NamespaceScopeRef<'a>(&'a str);
 
@@ -98,7 +99,7 @@ impl<'a> Parser<'a> for NamespaceScopeRef<'a> {
             alt((
                 tag("*"),
                 tag("c_glib"),
-                tag("rust"),
+                tag("rs"),
                 tag("cpp"),
                 tag("delphi"),
                 tag("haxe"),
