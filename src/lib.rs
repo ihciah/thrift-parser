@@ -1,3 +1,4 @@
+pub use nom::{Err, error::{Error, ErrorKind}};
 use nom::IResult;
 
 pub mod basic;
